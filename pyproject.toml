@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bitshares-signing"
+version = "1.0.0"
+description = "Lightweight Python library for BitShares"
+authors = [
+    { name = "squidKid-deluxe" },
+    { name = "litepresence" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+keywords = ["bitshares", "signing", "cryptography"]
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: POSIX :: Linux",
+    "Development Status :: 3 - Alpha",
+]
+dependencies = [
+    "websocket-client>=1.2.3",
+    "secp256k1<=0.13.2",
+    "ecdsa==0.18.0",
+]
+requires-python = ">= 3.9"
+
+[tool.setuptools]
+packages = ["bitshares_signing"]
