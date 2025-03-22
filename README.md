@@ -16,7 +16,7 @@
 
 WTFPL litepresence.com Dec 2021 & squidKid-deluxe Mar 2025
 
-** ManualSigning re-imagined **
+*ManualSigning re-imagined*
 
 ---------------------------------------------------
 

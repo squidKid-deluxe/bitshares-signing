@@ -10,7 +10,6 @@ authors = [
     { name = "squidKid-deluxe" },
     { name = "litepresence" }
 ]
-license = { file = "LICENSE" }
 readme = "README.md"
 keywords = ["bitshares", "signing", "cryptography"]
 classifiers = [

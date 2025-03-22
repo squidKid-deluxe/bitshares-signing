@@ -1,2 +1,3 @@
 bitshares_signing.egg-info/
 bitshares_signing/__pycache__/
+dist/
