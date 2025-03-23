@@ -142,6 +142,7 @@ def broker(order, broadcast=True):
         child.start()
         if JOIN:  # means main script will not continue till child done
             child.join(PROCESS_TIMEOUT)
+            child.terminate()
 
     return bool(auth.value)
 

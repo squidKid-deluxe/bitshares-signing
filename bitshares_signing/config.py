@@ -35,7 +35,7 @@ CORE_FEES = True
 # multiprocessing incarnations, default 3 attempts
 ATTEMPTS = 3
 # prevent extreme number of AI generated edicts; default 20
-LIMIT = 20
+LIMIT = None
 # default True to execute order in primary script process
 JOIN = True
 # ignore orders value less than ~X bitshares; 0 to disable
