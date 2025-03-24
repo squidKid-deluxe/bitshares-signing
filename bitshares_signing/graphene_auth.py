@@ -20,7 +20,7 @@ BitShares ECDSA for Login, Buy, Sell, Cancel, Transfer, Issue, Reserve
 
 """
 # DISABLE SELECT PYLINT TESTS
-# pylint: disable=bad-continuation, broad-except, too-many-locals, too-many-statements
+# pylint: disable=broad-except, too-many-locals, too-many-statements
 # pylint: disable=too-many-branches
 #
 # STANDARD PYTHON MODULES
@@ -28,13 +28,18 @@ import time  # hexidecimal to binary text
 from decimal import Decimal as decimal
 from multiprocessing import Process, Value  # convert back to PY variable
 
-from .build_transaction import build_transaction
+from bitshares_signing.build_transaction import build_transaction
 # GRAPHENE SIGNING MODULES
-from .config import ATTEMPTS, JOIN, NODES, PROCESS_TIMEOUT
-from .graphene_signing import (PrivateKey, serialize_transaction,
-                               sign_transaction, verify_transaction)
-from .rpc import rpc_broadcast_transaction, rpc_key_reference, wss_handshake
-from .utilities import it, trace
+from bitshares_signing.config import ATTEMPTS, JOIN, NODES, PROCESS_TIMEOUT
+from bitshares_signing.graphene_signing import (PrivateKey,
+                                                serialize_transaction,
+                                                sign_transaction,
+                                                verify_transaction)
+from bitshares_signing.rpc import (id_from_name, name_from_id, precision,
+                                   rpc_broadcast_transaction, rpc_get_account,
+                                   rpc_key_reference, rpc_open_orders,
+                                   wss_handshake)
+from bitshares_signing.utilities import it, trace
 
 # ISO8601 timeformat; 'graphene time'
 ISO8601 = "%Y-%m-%dT%H:%M:%S%Z"
@@ -43,7 +48,7 @@ ISO8601 = "%Y-%m-%dT%H:%M:%S%Z"
 # Order creation helpers
 
 
-def prototype_order(info, nodes=None):
+def prototype_order(info, nodes=None, rpc=None):
     """
     Generates a prototype order, including a header with account and asset
     metadata. It requires a list of cached nodes and asset details to build
@@ -60,28 +65,49 @@ def prototype_order(info, nodes=None):
                 - `account_name`: The issuer's public account name.
                 - `wif`: The issuer's private key in Wallet Import Format (WIF).
 
-    nodes (list, optional): A list of nodes to associate with the order. If 
+    nodes (list, optional): A list of nodes to associate with the order. If
                             not provided, defaults to `NODES`.
 
     Returns:
-    dict: A dictionary representing a prototype order, containing the 
+    dict: A dictionary representing a prototype order, containing the
           `header` and `nodes`.  To make it not a prototype, simply add an "edicts" key
           with your order information.
-    
+
     """
+    if rpc is None:
+        rpc = wss_handshake()
     if nodes is None:
         nodes = NODES
     header = {
-        "asset_id": info["asset_id"],
-        "asset_precision": info["asset_precision"],
-        "currency_id": info.get("currency_id", 0),
-        "currency_precision": info.get("currency_precision", 0),
-        "account_id": info["account_id"],
-        "account_name": info["account_name"],
-        "wif": info["wif"],
+        "asset_id": info.get(
+            "asset_id", id_from_name(rpc, info.get("asset_name", "BTS"))
+        ),
+        "currency_id": info.get(
+            "currency_id", id_from_name(rpc, info.get("currency_name", "HONEST.USD"))
+        ),
     }
+    header.update(
+        {
+            "asset_name": info.get("asset_name", name_from_id(rpc, header["asset_id"])),
+            "currency_name": info.get(
+                "currency_name", name_from_id(rpc, header["currency_id"])
+            ),
+        }
+    )
+    header.update(
+        {
+            "asset_precision": precision(rpc, header["asset_id"]),
+            "currency_precision": precision(rpc, header["currency_id"]),
+            "account_id": info.get(
+                "account_id", rpc_get_account(rpc, info["account_name"])
+            )["id"],
+            "account_name": info["account_name"],
+            "wif": info["wif"],
+        }
+    )
     order = {
         "header": header,
+        "edicts": [],
         "nodes": nodes,
     }
     return order
@@ -112,10 +138,10 @@ def broker(order, broadcast=True):
     """
     Executes an authenticated operation (one of SUPPORTED_OPS) with robust error handling.
 
-    This function acts as a timed, multiprocess wrapper for authorized operations. 
-    It ensures that buy, sell, or cancel commands are executed promptly by enforcing a 
-    timeout for each operation. If the operation does not complete within the 
-    specified timeout, the process is terminated and restarted. This also helps 
+    This function acts as a timed, multiprocess wrapper for authorized operations.
+    It ensures that buy, sell, or cancel commands are executed promptly by enforcing a
+    timeout for each operation. If the operation does not complete within the
+    specified timeout, the process is terminated and restarted. This also helps
     disconnect any hung websockets.
 
     Parameters:
@@ -131,6 +157,8 @@ def broker(order, broadcast=True):
     - If the operation still fails to execute within the timeout, it will be aborted.
     - After successful execution, the signal is set to 0 to indicate the process is complete.
     """
+    if "client_order_id" not in order["header"]:
+        order["header"]["client_order_id"] = int(time.time()*1e3)
     signal = Value("i", 0)
     auth = Value("i", 0)
     iteration = 0
@@ -166,12 +194,20 @@ def execute(signal, auth, order, broadcast):
             signed_tx = verify_transaction(signed_tx, wif)
             # don't actaully broadcast login op, signing it is enough
             if order["edicts"][0]["op"] != "login" and broadcast:
-                print(rpc_broadcast_transaction(rpc, signed_tx, order["header"]["client_order_id"]))
+                print(
+                    rpc_broadcast_transaction(
+                        rpc, signed_tx, order["header"]["client_order_id"]
+                    )
+                )
             auth.value = 1
-            msg = it("green", ("EXECUTED ORDER" if broadcast else "SIGNED AND VERIFIED ORDER"))
+            msg = it(
+                "green",
+                ("EXECUTED ORDER" if broadcast else "SIGNED AND VERIFIED ORDER"),
+            )
         else:
             msg = it("red", "REJECTED ORDER")
         return msg
+
     rpc = wss_handshake()
 
     wif = order["header"]["wif"]
@@ -203,35 +239,35 @@ def execute(signal, auth, order, broadcast):
     else:
         try:
             if (  # cancel all
-                order["edicts"][0]["op"] == "cancel" and "1.7.X" in order["edicts"][0]["ids"]
+                order["edicts"][0]["op"] == "cancel"
+                and "1.7.X" in order["edicts"][0]["ids"]
             ):
                 msg = it("red", "NO OPEN ORDERS")
                 open_orders = True
                 while open_orders:
-                    metanode = peerplays_trustless_client()
-                    open_orders = metanode["orders"]
-                    ids = order["edicts"][0]["ids"] = [
-                        order["orderNumber"] for order in open_orders
-                    ]
+                    open_orders = rpc_open_orders(
+                        rpc, order["header"]["account_name"], order["header"]
+                    )
+                    ids = order["edicts"][0]["ids"] = open_orders
                     if ids:
                         msg = transact(rpc, order, auth)
-                    time.sleep(5)
+                    time.sleep(5) # a block and a half
             elif (  # cancel some
-                order["edicts"][0]["op"] == "cancel" and "1.7.X" not in order["edicts"][0]["ids"]
+                order["edicts"][0]["op"] == "cancel"
+                and "1.7.X" not in order["edicts"][0]["ids"]
             ):
                 msg = it("red", "NO OPEN ORDERS")
                 open_orders = True
                 while open_orders:
-                    metanode = peerplays_trustless_client()
-                    open_orders = metanode["orders"]
+                    open_orders = rpc_open_orders(
+                        rpc, order["header"]["account_name"], order["header"]
+                    )
                     ids = order["edicts"][0]["ids"] = [
-                        order["orderNumber"]
-                        for order in open_orders
-                        if order in order["edicts"][0]["ids"]
+                        i for i in open_orders if i in order["edicts"][0]["ids"]
                     ]
                     if ids:
                         msg = transact(rpc, order, auth)
-                    time.sleep(5)
+                    time.sleep(5) # a block and a half
 
             else:  # all other order types
                 msg = transact(rpc, order, auth)

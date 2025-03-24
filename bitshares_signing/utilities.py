@@ -88,7 +88,6 @@ def from_iso_date(iso):
     return int(timegm(strptime((iso + "UTC"), ISO8601)))
 
 
-
 def fraction(num):
     """
     convert float to limited precision least common denominator fraction
@@ -117,3 +116,20 @@ def fraction(num):
         num /= 5
         den /= 5
     return {"base": int(num), "quote": int(den), "iteration": iteration}
+
+
+def read_file(doc):
+    with open(doc, "r") as handle:
+        data = handle.read()
+        handle.close()
+    return data
+
+
+def write_file(doc, contents):
+    try:
+        with open(doc, "w") as handle:
+            handle.write(contents)
+            handle.close()
+    except FileNotFoundError:
+        os.makedirs(os.path.dirname(doc), exist_ok=True)
+        write_file(doc, contents)

@@ -1,3 +1,4 @@
 bitshares_signing.egg-info/
 bitshares_signing/__pycache__/
+bitshares_signing/pipe/
 dist/

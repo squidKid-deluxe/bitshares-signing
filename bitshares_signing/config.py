@@ -19,13 +19,16 @@ WTFPL litepresence.com Dec 2021 & squidKid-deluxe Jan 2024
 USER CONTROLS
 
 TODO: Make this into a config class like that in GrapheneMetanode, so that the end
-user doesn't have to schlepp around in thier site-packages.
+user doesn't have to schlepp around in their site-packages.
 """
+import os
+
+PATH = os.path.abspath(os.path.dirname(__file__))
 
 # timeout during websocket handshake; default 4 seconds
 HANDSHAKE_TIMEOUT = 4
-# multiprocessing handler lifespan, default 20 seconds
-PROCESS_TIMEOUT = 20
+# multiprocessing handler lifespan, default 60 seconds
+PROCESS_TIMEOUT = 60
 # default False for persistent limit orders
 KILL_OR_FILL = False
 # default True scales elements of oversize gross order to means

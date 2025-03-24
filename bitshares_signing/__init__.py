@@ -196,6 +196,7 @@ def quickstart():
             "op": "swap",
             "amount": float(),
             "price": float(),
+            "pool": "1.19.x",
         },
         # deposit_pool - deposit `amount_a` of `asset` and `amount_b` of `currency` into `pool`
         {
@@ -266,7 +267,10 @@ def quickstart():
                 "flags": int(),
                 # the user may pay their market fees using core token at the core exchange rate
                 # periodically updated by the issuer from the fee pool maintained by the issuer
-                "core_exchange_rate": int(),
+                "core_exchange_rate": {
+                    "base": {"amount": int(), "asset_id": "1.3.1"},
+                    "quote": {"amount": int(), "asset_id": "1.3.0"},
+                },
                 # the issuer may create a list of only those who have permission to trade this asset
                 "whitelist_authorities": list("1.2.x"),
                 # as well as those who do not
