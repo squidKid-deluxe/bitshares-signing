@@ -25,6 +25,14 @@ import os
 
 PATH = os.path.abspath(os.path.dirname(__file__))
 
+
+
+# MAX is 4294967295; year 2106 due to 32 bit unsigned integer
+END_OF_TIME = 4 * 10**9  # about 75 years in future
+# very little
+SATOSHI = 0.00000001
+# almost 1
+SIXSIG = 0.999999
 # timeout during websocket handshake; default 4 seconds
 HANDSHAKE_TIMEOUT = 4
 # multiprocessing handler lifespan, default 60 seconds

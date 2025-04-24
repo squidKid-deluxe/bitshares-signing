@@ -125,7 +125,7 @@ Special thanks to @vvk123, @sschiessl, and @harukaff_bot.
 All remaining rights under WTFPL March 1765.
 """
 
-from bitshares_signing.graphene_auth import broker, prototype_order
+from .graphene_auth import broker, prototype_order
 
 __all__ = ["broker", "prototype_order", "SUPPORTED_OPS", "quickstart"]
 SUPPORTED_OPS = [
@@ -174,13 +174,13 @@ def quickstart():
 
     # add edicts
     order["edicts"] = [
-        # buy - buying `asset`, receiving `currency`
+        # buy - buying `asset`, selling `currency`
         {
             "op": "buy",
             "amount": float(),
             "price": float(),
         },
-        # sell - selling `asset`, receiving `currency`
+        # sell - selling `asset`, buying `currency`
         {
             "op": "sell",
             "amount": float(),

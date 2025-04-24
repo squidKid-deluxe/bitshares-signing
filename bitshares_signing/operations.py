@@ -1,7 +1,7 @@
-from bitshares_signing.types import (Array, Extension, Id, Int64, ObjectId,
-                                     Optional, PointInTime, Signature,
-                                     StaticVariant, String, Uint8, Uint16,
-                                     Uint32)
+from .base58 import PublicKey
+from .config import PREFIX
+from .types import (Array, Bytes, Extension, Int64, ObjectId, Optional,
+                    PointInTime, String, Uint8, Uint16, Uint32, Uint64)
 
 
 def is_args_this_class(self, args):
@@ -49,6 +49,64 @@ class Asset(GrapheneObject):  # bitsharesbase/objects.py
         return {
             "amount": Int64(kwargs["amount"]),
             "asset_id": ObjectId(kwargs["asset_id"], "asset"),
+        }
+
+class Memo(GrapheneObject):
+    """Memo object for transactions"""
+
+    def _prepare_data(self, kwargs):
+        prefix = kwargs.pop("prefix", PREFIX)
+        if "message" in kwargs and kwargs["message"]:
+            return {
+                "from": PublicKey(kwargs["from"], prefix=prefix),
+                "to": PublicKey(kwargs["to"], prefix=prefix),
+                "nonce": Uint64(int(kwargs["nonce"])),
+                "message": Bytes(kwargs["message"]),
+            }
+        return None
+
+
+class Transfer(GrapheneObject):
+    """Transfer operation object"""
+
+    def _prepare_data(self, kwargs):
+        prefix = kwargs.get("prefix", PREFIX)
+        if "memo" in kwargs and kwargs["memo"]:
+            if isinstance(kwargs["memo"], dict):
+                kwargs["memo"]["prefix"] = prefix
+                memo = Optional(Memo(**kwargs["memo"]))
+            else:
+                memo = Optional(Memo(kwargs["memo"]))
+        else:
+            memo = Optional(None)
+
+        return {
+            "fee": Asset(kwargs["fee"]),
+            "from": ObjectId(kwargs["from"], "account"),
+            "to": ObjectId(kwargs["to"], "account"),
+            "amount": Asset(kwargs["amount"]),
+            "memo": memo,
+            "extensions": Array([]),
+        }
+
+
+class Asset_issue(GrapheneObject):
+    """Asset issuance operation object"""
+
+    def _prepare_data(self, kwargs):
+        prefix = kwargs.get("prefix", PREFIX)
+        if "memo" in kwargs and kwargs["memo"]:
+            memo = Optional(Memo(prefix=prefix, **kwargs["memo"]))
+        else:
+            memo = Optional(None)
+
+        return {
+            "fee": Asset(kwargs["fee"]),
+            "issuer": ObjectId(kwargs["issuer"], "account"),
+            "asset_to_issue": Asset(kwargs["asset_to_issue"]),
+            "issue_to_account": ObjectId(kwargs["issue_to_account"], "account"),
+            "memo": memo,
+            "extensions": Array([]),
         }
 
 

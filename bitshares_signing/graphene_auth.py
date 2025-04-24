@@ -25,21 +25,17 @@ BitShares ECDSA for Login, Buy, Sell, Cancel, Transfer, Issue, Reserve
 #
 # STANDARD PYTHON MODULES
 import time  # hexidecimal to binary text
-from decimal import Decimal as decimal
 from multiprocessing import Process, Value  # convert back to PY variable
 
-from bitshares_signing.build_transaction import build_transaction
+from .build_transaction import build_transaction
 # GRAPHENE SIGNING MODULES
-from bitshares_signing.config import ATTEMPTS, JOIN, NODES, PROCESS_TIMEOUT
-from bitshares_signing.graphene_signing import (PrivateKey,
-                                                serialize_transaction,
-                                                sign_transaction,
-                                                verify_transaction)
-from bitshares_signing.rpc import (id_from_name, name_from_id, precision,
-                                   rpc_broadcast_transaction, rpc_get_account,
-                                   rpc_key_reference, rpc_open_orders,
-                                   wss_handshake)
-from bitshares_signing.utilities import it, trace
+from .config import ATTEMPTS, JOIN, NODES, PROCESS_TIMEOUT
+from .graphene_signing import (PrivateKey, serialize_transaction,
+                               sign_transaction, verify_transaction)
+from .rpc import (id_from_name, name_from_id, precision,
+                  rpc_broadcast_transaction, rpc_get_account,
+                  rpc_key_reference, rpc_open_orders, wss_handshake)
+from .utilities import it, trace
 
 # ISO8601 timeformat; 'graphene time'
 ISO8601 = "%Y-%m-%dT%H:%M:%S%Z"
@@ -99,8 +95,8 @@ def prototype_order(info, nodes=None, rpc=None):
             "asset_precision": precision(rpc, header["asset_id"]),
             "currency_precision": precision(rpc, header["currency_id"]),
             "account_id": info.get(
-                "account_id", rpc_get_account(rpc, info["account_name"])
-            )["id"],
+                "account_id", rpc_get_account(rpc, info["account_name"])["id"]
+            ),
             "account_name": info["account_name"],
             "wif": info["wif"],
         }
@@ -158,7 +154,7 @@ def broker(order, broadcast=True):
     - After successful execution, the signal is set to 0 to indicate the process is complete.
     """
     if "client_order_id" not in order["header"]:
-        order["header"]["client_order_id"] = int(time.time()*1e3)
+        order["header"]["client_order_id"] = int(time.time() * 1e3)
     signal = Value("i", 0)
     auth = Value("i", 0)
     iteration = 0
@@ -251,7 +247,7 @@ def execute(signal, auth, order, broadcast):
                     ids = order["edicts"][0]["ids"] = open_orders
                     if ids:
                         msg = transact(rpc, order, auth)
-                    time.sleep(5) # a block and a half
+                    time.sleep(5)  # a block and a half
             elif (  # cancel some
                 order["edicts"][0]["op"] == "cancel"
                 and "1.7.X" not in order["edicts"][0]["ids"]
@@ -267,7 +263,7 @@ def execute(signal, auth, order, broadcast):
                     ]
                     if ids:
                         msg = transact(rpc, order, auth)
-                    time.sleep(5) # a block and a half
+                    time.sleep(5)  # a block and a half
 
             else:  # all other order types
                 msg = transact(rpc, order, auth)

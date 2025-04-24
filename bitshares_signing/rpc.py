@@ -28,11 +28,13 @@ import os
 import time
 from random import shuffle
 
-# GRAPHENE SIGNING MODULES
-from bitshares_signing.config import HANDSHAKE_TIMEOUT, NODES, PATH
-from bitshares_signing.utilities import read_file, trace, write_file
 # THIRD PARTY MODULES
 from websocket import create_connection as wss  # handshake to node
+from websocket._exceptions import WebSocketConnectionClosedException
+
+# GRAPHENE SIGNING MODULES
+from .config import HANDSHAKE_TIMEOUT, NODES, PATH
+from .utilities import read_file, trace, write_file
 
 
 def wss_handshake(rpc=None):
@@ -88,12 +90,14 @@ def wss_query(rpc, params, client_order_id=1):
             # print(ret)
             # print('elapsed %.3f sec' % (time.time() - start))
             return ret
+        except WebSocketConnectionClosedException:
+            raise RuntimeError("Websocket Closed")
         except Exception as error:
             try:  # attempt to terminate the connection
                 rpc.close()
             except Exception:
                 pass
-            trace(error)  # tell me what happened
+            print("RPC failed, switching nodes...")
             # switch NODES
             rpc = wss_handshake(rpc)
             continue
@@ -198,22 +202,26 @@ def rpc_orderbook(rpc, asset, currency, depth=3):
     )
     asks = []
     bids = []
-    for i, _ in enumerate(order_book["asks"]):
-        price = float(order_book["asks"][i]["price"]/10**16)
-        if float(price) == 0:
-            raise ValueError("zero price in asks")
-        volume = float(order_book["asks"][i]["quote"] / 10 ** int(asset_precision))
-        asks.append((price, volume))
-    for i, _ in enumerate(order_book["bids"]):
-        price = float(order_book["bids"][i]["price"]/10**16)
-        if float(price) == 0:
-            raise ValueError("zero price in bids")
-        volume = float(order_book["bids"][i]["quote"] / 10 ** int(asset_precision))
-        bids.append((price, volume))
+    try:
+        for i, _ in enumerate(order_book["asks"]):
+            price = float(order_book["asks"][i]["price"])
+            if float(price) == 0:
+                raise ValueError("zero price in asks")
+            volume = float(float(order_book["asks"][i]["quote"]) / 10 ** int(asset_precision))
+            asks.append((price, volume))
+        for i, _ in enumerate(order_book["bids"]):
+            price = float(order_book["bids"][i]["price"])
+            if float(price) == 0:
+                raise ValueError("zero price in bids")
+            volume = float(float(order_book["bids"][i]["quote"]) / 10 ** int(asset_precision))
+            bids.append((price, volume))
+    except:
+        print(order_book)
+        raise
     return {"asks": asks, "bids": bids}
 
 
-def rpc_pool_book(rpc, pool_id, depth=100):
+def rpc_pool_book(rpc, pool_id=None, pool_data=None, depth=100, maxvolume=None):
     # async def gather_orderbook(self, pool_data, rpc, pair, req_params, ws):
     """
     Gather orderbook information either from the pool data or via RPC request
@@ -237,8 +245,10 @@ def rpc_pool_book(rpc, pool_id, depth=100):
         return y_start - (x_start * y_start) / (x_start + delta_x)
 
     depth += 1
-
-    pool_data = rpc_get_objects(rpc, pool_id)
+    if pool_id is not None:
+        pool_data = rpc_get_objects(rpc, pool_id)
+    elif pool_data is None:
+        raise ValueError("Must provide at least one of pool_id or pool_data")
 
     balance_a = int(pool_data["balance_a"]) / 10 ** precision(rpc, pool_data["asset_a"])
     balance_b = int(pool_data["balance_b"]) / 10 ** precision(rpc, pool_data["asset_b"])
@@ -246,7 +256,7 @@ def rpc_pool_book(rpc, pool_id, depth=100):
 
     # List to store the order book
     bidp, bidv, askp, askv = [], [], [], []
-    step = balance_a / depth
+    step = (balance_a if maxvolume is None else maxvolume) / depth
 
     for i in range(1, depth):
         delta_a = i * step
@@ -274,6 +284,120 @@ def rpc_pool_book(rpc, pool_id, depth=100):
 
     return {"asks": asks, "bids": bids}
 
+def rpc_fill_order_history(rpc, account_id, asset, currency):
+    """
+    we get a list of "fill order history" dicts for one trading_pair from core:
+    {
+        "id": "0.0.69",
+        "key": {
+            "base": "1.3.0",
+            "quote": "1.3.8",
+            "sequence": -5
+        },
+        "time.time": "2021-12-22T23:09:42",
+        "op": {
+            "fee": {
+                "amount": 0,
+                "asset_id": "1.3.8"
+            },
+            "order_id": "1.7.181",
+            "account_id": "1.2.207",
+            "pays": {
+                "amount": 100000,
+                "asset_id": "1.3.0"
+            },
+            "receives": {
+                "amount": 60000000,
+                "asset_id": "1.3.8"
+            }
+        }
+    }
+    we need to refine this into dicts
+    for our account for each trading_pair in this format:
+    {
+        "exchange_order_id": str(),
+        "trade_type": str(),
+        "price": Decimal(),
+        "amount": Decimal(),
+    }
+    """
+    iteration = 0
+    rpc_fills = []
+    while rpc_fills == []:
+        iteration += 1
+        if iteration > 10:
+            break
+        ret = wss_query(rpc,
+            [
+                "history",
+                "get_fill_order_history",
+                [id_from_name(rpc, asset), id_from_name(rpc, currency), 100],
+            ],
+        )
+        # sort by user
+        fills = [i for i in ret if i["op"]["account_id"] == account_id]
+        for fill in fills:
+            print(fill)
+            # base
+            base_id = fill["op"]["pays"]["asset_id"]
+            base_name = name_from_id(rpc, base_id)
+            base_precision = precision(rpc, base_id)
+            pays = float(fill["op"]["pays"]["amount"]) / 10**base_precision
+            # quote
+            quote_id = fill["op"]["receives"]["asset_id"]
+            quote_name = name_from_id(rpc, quote_id)
+            quote_precision = precision(rpc, quote_id)
+            receives = (
+                float(fill["op"]["receives"]["amount"]) / 10**quote_precision
+            )
+            # fee
+            fee = {"asset": quote_name, "amount": 0}
+            try:
+                fee_id = fill["op"]["fee"]["asset_id"]
+                fee_name = name_from_id(rpc, fee_id)
+                if fee_name not in [base_name, quote_name]:
+                    raise ValueError("fee outside of trading pair")
+                fee_precision = precision(rpc, fee_id)
+                fee_amount = (
+                    float(fill["op"]["fee"]["amount"]) / 10**fee_precision
+                )
+                fee = {"asset": fee_name, "amount": fee_amount}
+            except Exception:
+                pass
+            # pair and order id
+            fill_trading_pair = base_name + "-" + quote_name
+            exchange_order_id = fill["op"]["order_id"]
+
+            # Basic data; doesn't change with pair order
+            rpc_fills.append(
+                {
+                    "exchange_order_id": str(exchange_order_id),
+                    "unix": from_iso_date(fill["time"]),
+                    "sequence": abs(fill["key"]["sequence"]),
+                    "fee": fee,
+                    "is_maker": fill["op"].get("is_maker", False),
+                }
+            )
+
+            # eg pays BTC receives USD in BTC-USD market; price = $50,000
+            if base_name == asset and quote_name == currency:
+                rpc_fills[-1].update(
+                    {
+                        "price": float(receives / pays),
+                        "amount": float(pays),
+                        "type": "SELL",
+                    }
+                )
+            # eg pays USD receives BTC in BTC-USD market; price = $50,000
+            elif base_name == currency and quote_name == asset:
+                rpc_fills[-1].update(
+                    {
+                        "price": float(pays / receives),
+                        "amount": float(receives),
+                        "type": "BUY",
+                    }
+                )
+    return rpc_fills
 
 def rpc_balances(rpc, account_name):
     """
@@ -290,7 +414,8 @@ def rpc_balances(rpc, account_name):
 
     # convert from graphene to human-readable
     balances = {
-        name_from_id(rpc, obj["asset_id"]): int(obj["amount"]) / 10 ** precision(rpc, obj["asset_id"])
+        name_from_id(rpc, obj["asset_id"]): int(obj["amount"])
+        / 10 ** precision(rpc, obj["asset_id"])
         for obj in balances
     }
 

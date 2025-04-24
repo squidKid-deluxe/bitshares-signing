@@ -2,7 +2,7 @@ import json
 from binascii import unhexlify
 from struct import pack  # convert to string representation of C struct
 
-from bitshares_signing.utilities import from_iso_date
+from .utilities import from_iso_date
 
 # bitsharesbase/objecttypes.py used by ObjectId() to confirm a.b.c
 TYPES = {
@@ -122,6 +122,7 @@ class Uint64:
     def __bytes__(self):
         return pack("<Q", self.data)
 
+
 class Int64:
     """
     byte string of 64 bit signed integers
@@ -237,6 +238,7 @@ class StaticVariant:
 
     def __str__(self):
         return json.dumps([self.type_id, self.data.json()])
+
 
 class Bytes:
     """Bytes

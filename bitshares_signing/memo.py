@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 import hashlib
 import struct
-import sys
-
 from binascii import hexlify, unhexlify
-
 
 try:
     from Cryptodome.Cipher import AES

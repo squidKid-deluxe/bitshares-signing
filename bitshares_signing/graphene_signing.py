@@ -24,378 +24,36 @@ Graphene types and signing function required to authenticate operation being bro
 # STANDARD PYTHON MODULES
 from binascii import hexlify  # binary text to hexidecimal
 from binascii import unhexlify  # hexidecimal to binary text
-from hashlib import new as hashlib_new  # access algorithm library
 from hashlib import sha256  # message digest algorithm
 from json import dumps as json_dumps  # serialize object to string
 from json import loads as json_loads  # deserialize string to object
 from struct import pack  # convert to string representation of C struct
 
-# GRAPHENE SIGNING MODULES
-from bitshares_signing.config import ID, PREFIX
-# if there was ever a use for "import *"...
-from bitshares_signing.operations import (Asset, Asset_claim_pool,
-                                          Asset_create, Asset_publish_feed,
-                                          Asset_reserve,
-                                          Asset_update_feed_producers,
-                                          AssetOptions, BitAssetOptions,
-                                          Call_order_update,
-                                          CallOrderExtension, GrapheneObject,
-                                          Limit_order_cancel,
-                                          Limit_order_create,
-                                          Liquidity_pool_create,
-                                          Liquidity_pool_deposit,
-                                          Liquidity_pool_exchange, Price,
-                                          PriceFeed)
-from bitshares_signing.rpc import rpc_get_transaction_hex
-from bitshares_signing.types import (Array, Bytes, Id, ObjectId, Optional,
-                                     PointInTime, Signature, Uint16, Uint32,
-                                     Uint64, varint)
-from bitshares_signing.utilities import from_iso_date, it
 # THIRD PARTY MODULES
-from ecdsa import SECP256k1 as ecdsa_SECP256k1  # curve
-from ecdsa import SigningKey as ecdsa_SigningKey  # class
-from ecdsa import VerifyingKey as ecdsa_VerifyingKey  # class
-from ecdsa import numbertheory as ecdsa_numbertheory  # largest import
-from ecdsa import util as ecdsa_util  # module
 from secp256k1 import PrivateKey as secp256k1_PrivateKey  # class
 from secp256k1 import PublicKey as secp256k1_PublicKey  # class
 from secp256k1 import ffi as secp256k1_ffi  # compiled ffi object
 from secp256k1 import lib as secp256k1_lib  # library
 
+from .base58 import PrivateKey, PublicKey
+# GRAPHENE SIGNING MODULES
+from .config import ID, PREFIX
+# if there was ever a use for "import *"...
+from .operations import (Asset_claim_pool, Asset_create, Asset_issue,
+                         Asset_publish_feed, Asset_reserve,
+                         Asset_update_feed_producers, Call_order_update,
+                         GrapheneObject, Limit_order_cancel,
+                         Limit_order_create, Liquidity_pool_create,
+                         Liquidity_pool_deposit, Liquidity_pool_exchange,
+                         Transfer)
+from .rpc import rpc_get_transaction_hex
+from .types import Array, Id, PointInTime, Signature, Uint16, Uint32, varint
+from .utilities import from_iso_date, it
+
 # GLOBAL CONSTANTS
-# base58 encoding and decoding
-# this is alphabet defined minus similar characters like 0 and O:
-BASE58 = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-# hex encoding and decoding
-HEXDIGITS = "0123456789abcdefABCDEF"
 ALL_FLAGS = (
     secp256k1_lib.SECP256K1_CONTEXT_VERIFY | secp256k1_lib.SECP256K1_CONTEXT_SIGN
 )
-
-
-# BASE 58 ENCODE, DECODE, AND CHECK "  # graphenebase/base58.py
-class Base58:
-    """
-    This class serves as an abstraction layer
-    to deal with base58 encoded strings
-    and their corresponding hex and binary representation
-    """
-
-    def __init__(self, data, prefix=PREFIX):
-        self._prefix = prefix
-        if all(c in HEXDIGITS for c in data):
-            self._hex = data
-        elif data[0] in ["5", "6"]:
-            self._hex = base58_check_decode(data)
-        elif data[0] in ["K", "L"]:
-            self._hex = base58_check_decode(data)[:-2]
-        elif data[: len(self._prefix)] == self._prefix:
-            self._hex = gph_base58_check_decode(data[len(self._prefix) :])
-        else:
-            raise ValueError("Error loading Base58 object")
-
-    def __format__(self, _format):
-        assert _format.upper() == PREFIX
-        return _format.upper() + str(self)
-
-    def __repr__(self):  # hex string of data
-        return self._hex
-
-    def __str__(self):  # base58 string of data
-        return gph_base58_check_encode(self._hex)
-
-    def __bytes__(self):  # raw bytes of data
-        return unhexlify(self._hex)
-
-
-def base58_decode(base58_str):
-    """
-    #
-    """
-    base58_text = bytes(base58_str, "ascii")
-    num = 0
-    leading_zeroes_count = 0
-    for byte in base58_text:
-        num = num * 58 + BASE58.find(byte)
-        if num == 0:
-            leading_zeroes_count += 1
-    res = bytearray()
-    while num >= 256:
-        div, mod = divmod(num, 256)
-        res.insert(0, mod)
-        num = div
-    res.insert(0, num)
-    return hexlify(bytearray(1) * leading_zeroes_count + res).decode("ascii")
-
-
-def base58_encode(hexstring):
-    """
-    #
-    """
-    byteseq = bytes(unhexlify(bytes(hexstring, "ascii")))
-    num = 0
-    leading_zeroes_count = 0
-    for byte in byteseq:
-        num = num * 256 + byte
-        if num == 0:
-            leading_zeroes_count += 1
-    res = bytearray()
-    while num >= 58:
-        div, mod = divmod(num, 58)
-        res.insert(0, BASE58[mod])
-        num = div
-    res.insert(0, BASE58[num])
-    return (BASE58[0:1] * leading_zeroes_count + res).decode("ascii")
-
-
-def ripemd160(string):
-    """
-    160-bit cryptographic hash function
-    """
-    r160 = hashlib_new("ripemd160")  # import the library
-    r160.update(unhexlify(string))
-    return r160.digest()
-
-
-def double_sha256(string):
-    """
-    double sha256 cryptographic hash function
-    """
-    return sha256(sha256(unhexlify(string)).digest()).digest()
-
-
-def base58_check_encode(version, payload):
-    """
-    #
-    """
-    string = ("%.2x" % version) + payload
-    checksum = double_sha256(string)[:4]
-    return base58_encode(string + hexlify(checksum).decode("ascii"))
-
-
-def gph_base58_check_encode(string):
-    """
-    #
-    """
-    checksum = ripemd160(string)[:4]
-    return base58_encode(string + hexlify(checksum).decode("ascii"))
-
-
-def base58_check_decode(string):
-    """
-    #
-    """
-    string = unhexlify(base58_decode(string))
-    dec = hexlify(string[:-4]).decode("ascii")
-    checksum = double_sha256(dec)[:4]
-    assert string[-4:] == checksum
-    return dec[2:]
-
-
-def gph_base58_check_decode(string):
-    """
-    #
-    """
-    string = unhexlify(base58_decode(string))
-    dec = hexlify(string[:-4]).decode("ascii")
-    checksum = ripemd160(dec)[:4]
-    assert string[-4:] == checksum
-    return dec
-
-
-# ADDRESS AND KEYS
-class Address:
-    """
-    # cropped litepresence2019
-    Example :: Address("BTSFN9r6VYzBK8EKtMewfNbfiGCr56pHDBFi")
-    # graphenebase/account.py
-    """
-
-    def __init__(self, address=None, pubkey=None, prefix=PREFIX):
-        self.prefix = prefix
-        self.pubkey = Base58(pubkey, prefix=prefix)
-        self._address = address
-
-
-class PublicKey:
-    """
-    # graphenebase/account.py
-    This class deals with Public Keys and inherits ``Address``.
-    :param str pk: Base58 encoded public key
-    :param str prefix: Network prefix (defaults to ``BTS``)
-    """
-
-    def __init__(self, pk, prefix=PREFIX):
-        self.prefix = prefix
-        self._pk = Base58(pk, prefix=prefix)
-        self.address = Address(pubkey=pk, prefix=prefix)
-        self.pubkey = self._pk
-
-    def derive_y_from_x(self, xxx, is_even):
-        """
-        Derive yyy point from xxx point:
-        e: yyy^2 = xxx^3 + ax + bbb mod ppp
-        """
-        curve = ecdsa_SECP256k1.curve
-        aaa, bbb, ppp = curve.a(), curve.b(), curve.p()
-        alpha = (pow(xxx, 3, ppp) + aaa * xxx + bbb) % ppp
-        beta = ecdsa_numbertheory.square_root_mod_prime(alpha, ppp)
-        if (beta % 2) == is_even:
-            beta = ppp - beta
-        return beta
-
-    def compressed(self):
-        """
-        Derive compressed public key
-        """
-        order = ecdsa_SECP256k1.generator.order()
-        point = ecdsa_VerifyingKey.from_string(
-            bytes(self), curve=ecdsa_SECP256k1
-        ).pubkey.point
-        x_str = ecdsa_util.number_to_string(point.x(), order)
-        # y_str = ecdsa_util.number_to_string(point.y(), order)
-        compressed = hexlify(bytes(chr(2 + (point.y() & 1)), "ascii") + x_str).decode(
-            "ascii"
-        )
-        return compressed
-
-    def un_compressed(self):
-        """
-        Derive uncompressed key
-        """
-        public_key = repr(self._pk)
-        prefix = public_key[0:2]
-        if prefix == "04":
-            return public_key
-        assert prefix in ["02", "03"]
-        xxx = int(public_key[2:], 16)
-        yyy = self.derive_y_from_x(xxx, (prefix == "02"))
-        return "04" + "%064x" % xxx + "%064x" % yyy
-
-    def point(self):
-        """
-        Return the point for the public key
-        """
-        string = unhexlify(self.un_compressed())
-        return ecdsa_VerifyingKey.from_string(
-            string[1:], curve=ecdsa_SECP256k1
-        ).pubkey.point
-
-    def __repr__(self):
-        """
-        Gives the hex representation of the Graphene public key.
-        """
-        return repr(self._pk)
-
-    def __format__(self, _format):
-        """
-        Formats the instance of:doc:`Base58 <base58>
-        ` according to ``_format``
-        """
-        return format(self._pk, _format)
-
-    def __bytes__(self):
-        """
-        Returns the raw public key (has length 33)
-        """
-        return bytes(self._pk)
-
-
-class PrivateKey:
-    """
-    Derives the compressed and uncompressed public keys and
-    constructs two instances of ``PublicKey``:
-    # Bitshares(MIT) graphenebase/account.py
-    # Bitshares(MIT) bitsharesbase/account.py
-    # merged litepresence2019
-    """
-
-    def __init__(self, wif=None, prefix=PREFIX):
-        self._wif = wif if isinstance(wif, Base58) else Base58(wif)
-        self._pubkeyhex, self._pubkeyuncompressedhex = self.compressed_pubkey()
-        self.pubkey = PublicKey(self._pubkeyhex, prefix=prefix)
-        self.uncompressed = PublicKey(self._pubkeyuncompressedhex, prefix=prefix)
-        self.uncompressed.address = Address(
-            pubkey=self._pubkeyuncompressedhex, prefix=prefix
-        )
-        self.address = Address(pubkey=self._pubkeyhex, prefix=prefix)
-
-    def compressed_pubkey(self):
-        """
-        Derive uncompressed public key
-        """
-        secret = unhexlify(repr(self._wif))
-        order = ecdsa_SigningKey.from_string(
-            secret, curve=ecdsa_SECP256k1
-        ).curve.generator.order()
-        point = ecdsa_SigningKey.from_string(
-            secret, curve=ecdsa_SECP256k1
-        ).verifying_key.pubkey.point
-        x_str = ecdsa_util.number_to_string(point.x(), order)
-        y_str = ecdsa_util.number_to_string(point.y(), order)
-        compressed = hexlify(chr(2 + (point.y() & 1)).encode("ascii") + x_str).decode(
-            "ascii"
-        )
-        uncompressed = hexlify(chr(4).encode("ascii") + x_str + y_str).decode("ascii")
-        return [compressed, uncompressed]
-
-    def __bytes__(self):
-        """
-        Returns the raw private key
-        """
-        return bytes(self._wif)
-
-
-class Memo(GrapheneObject):
-    def _prepare_data(self, kwargs):
-        prefix = kwargs.pop("prefix", PREFIX)
-        if "message" in kwargs and kwargs["message"]:
-            return {
-                "from": PublicKey(kwargs["from"], prefix=prefix),
-                "to": PublicKey(kwargs["to"], prefix=prefix),
-                "nonce": Uint64(int(kwargs["nonce"])),
-                "message": Bytes(kwargs["message"]),
-            }
-        else:
-            return None
-
-
-class Transfer(GrapheneObject):
-    def _prepare_data(self, kwargs):
-        prefix = kwargs.get("prefix", PREFIX)
-        if "memo" in kwargs and kwargs["memo"]:
-            if isinstance(kwargs["memo"], dict):
-                kwargs["memo"]["prefix"] = prefix
-                memo = Optional(Memo(**kwargs["memo"]))
-            else:
-                memo = Optional(Memo(kwargs["memo"]))
-        else:
-            memo = Optional(None)
-        return {
-            "fee": Asset(kwargs["fee"]),
-            "from": ObjectId(kwargs["from"], "account"),
-            "to": ObjectId(kwargs["to"], "account"),
-            "amount": Asset(kwargs["amount"]),
-            "memo": memo,
-            "extensions": Array([]),
-        }
-
-
-class Asset_issue(GrapheneObject):
-    def _prepare_data(self, kwargs):
-        prefix = kwargs.get("prefix", PREFIX)
-        if "memo" in kwargs and kwargs["memo"]:
-            memo = Optional(Memo(prefix=prefix, **kwargs["memo"]))  # FIXME
-        else:
-            memo = Optional(None)
-        return {
-            "fee": Asset(kwargs["fee"]),
-            "issuer": ObjectId(kwargs["issuer"], "account"),
-            "asset_to_issue": Asset(kwargs["asset_to_issue"]),
-            "issue_to_account": ObjectId(kwargs["issue_to_account"], "account"),
-            "memo": memo,
-            "extensions": Array([]),
-        }
 
 
 class Operation:  # refactored  litepresence2019
@@ -481,13 +139,13 @@ class SignedTransaction(GrapheneObject):  # merged litepresence2019
                 kwargs["operations"] = Array(kwargs["operations"])
 
         return {
-                "ref_block_num": Uint16(kwargs["ref_block_num"]),
-                "ref_block_prefix": Uint32(kwargs["ref_block_prefix"]),
-                "expiration": PointInTime(kwargs["expiration"]),
-                "operations": kwargs["operations"],
-                "extensions": kwargs["extensions"],
-                "signatures": kwargs["signatures"],
-            }
+            "ref_block_num": Uint16(kwargs["ref_block_num"]),
+            "ref_block_prefix": Uint32(kwargs["ref_block_prefix"]),
+            "expiration": PointInTime(kwargs["expiration"]),
+            "operations": kwargs["operations"],
+            "extensions": kwargs["extensions"],
+            "signatures": kwargs["signatures"],
+        }
 
     @property
     def id(self):
@@ -508,17 +166,6 @@ class SignedTransaction(GrapheneObject):  # merged litepresence2019
     def getOperationKlass(self):
         print("SignedTransaction.get_operationKlass")
         return Operation
-
-    # FIXME ded code?
-    # def derSigToHexSig(self, s):
-    #     print("SignedTransaction.derSigToHexSig")
-    #     s, junk = ecdsa_der.remove_sequence(unhexlify(s))
-    #     if junk:
-    #         print("JUNK: %s", hexlify(junk).decode("ascii"))
-    #     assert junk == b""
-    #     x, s = ecdsa_der.remove_integer(s)
-    #     y, s = ecdsa_der.remove_integer(s)
-    #     return "%064x%064x" % (x, y)
 
     def derive_digest(self, chain):
         print("SignedTransaction.derive_digest")
@@ -581,68 +228,11 @@ class SignedTransaction(GrapheneObject):  # merged litepresence2019
             print(it("cyan", "len(pubKeysFound[0])"), len(pubKeysFound[0]))
             print("")
             print(it("green", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"))
-
-            # if k not in pubKeysFound and repr(pubkey) not in pubKeysFound:
-            #     print(
-            #         it(
-            #             "blue",
-            #             "if k not in pubKeysFound and repr(pubkey) "
-            #             + "not in pubKeysFound:",
-            #         )
-            #     )
-            #     k = PublicKey(PublicKey(k).compressed())
-            #     f = format(k, PREFIX)  # chain_params["prefix"]) # 'BTS'
-            #     print("")
-            #     print(it("red", "FIXME"))
-            #     raise Exception("Signature for %s missing!" % f)
-
         return pubKeysFound
-
-    # FIXME: ded code?
-    # def sign(self, wifkeys, chain=PREFIX):
-    #     print("SignedTransaction.sign")
-    #     """
-    #     Sign the transaction with the provided private keys.
-    #     """
-    #     # FIXME is this even used????
-    #     self.derive_digest(chain)
-
-    #     # Get Unique private keys
-    #     self.privkeys = []
-    #     [self.privkeys.append(item) for item in wifkeys if item not in self.privkeys]
-
-    #     # Sign the message with every private key given!
-    #     sigs = []
-    #     for wif in self.privkeys:
-    #         signature = sign_message(self.message, wif)
-    #         sigs.append(Signature(signature))
-
-    #     self.data["signatures"] = Array(sigs)
-    #     return self
 
 
 # SERIALIZATION
-
-
 def serialize_transaction(rpc, trx):
-    """
-    {"method":"call","params":[
-        2,
-        "get_required_signatures",
-            [{"ref_block_num":0,
-            "ref_block_prefix":0,
-            "expiration":"1970-01-01T00:00:00",
-            "operations":
-                [[3,{
-                "fee":{"amount":"48260","asset_id":"1.3.0"},
-                "funding_account":"1.2.11111111",
-                "delta_collateral":{"amount":"1","asset_id":"1.3.5650"},
-                "delta_debt":{"amount":"0","asset_id":"1.3.5662"},
-                "extensions":{"target_collateral_ratio":2000}}]],
-                "extensions":[],"signatures":[]},
-                ["BTS6upQe7upQe7upQe7upQe7upQe7upQe7upQe7upQe7upQe7upQe7"]]],
-            "id":371}
-    """
     if trx["operations"] == []:
         return trx, b""
     # gist.github.com/xeroc/9bda11add796b603d83eb4b41d38532b
