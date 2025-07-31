@@ -13,11 +13,7 @@ from hashlib import new as hashlib_new
 from hashlib import sha256
 
 # Third party modules
-from ecdsa import SECP256k1 as ecdsa_SECP256k1
-from ecdsa import SigningKey as ecdsa_SigningKey
-from ecdsa import VerifyingKey as ecdsa_VerifyingKey
-from ecdsa import numbertheory as ecdsa_numbertheory
-from ecdsa import util as ecdsa_util
+import secp256k1  # Replaced ecdsa with secp256k1
 
 # Graphene signing modules
 from .config import PREFIX
@@ -165,45 +161,28 @@ class PublicKey:
         self._pk = Base58(pk, prefix=prefix)
         self.address = Address(pubkey=pk, prefix=prefix)
         self.pubkey = self._pk
-
-    def derive_y_from_x(self, xxx, is_even):
-        """Derive y-coordinate from x-coordinate"""
-        curve = ecdsa_SECP256k1.curve
-        aaa, bbb, ppp = curve.a(), curve.b(), curve.p()
-        alpha = (pow(xxx, 3, ppp) + aaa * xxx + bbb) % ppp
-        beta = ecdsa_numbertheory.square_root_mod_prime(alpha, ppp)
-        if (beta % 2) == is_even:
-            beta = ppp - beta
-        return beta
+        # Create a secp256k1 PublicKey object for internal operations
+        self._secp256k1_pubkey = secp256k1.PublicKey(bytes(self), raw=True)
 
     def compressed(self):
         """Generate compressed public key"""
-        order = ecdsa_SECP256k1.generator.order()
-        point = ecdsa_VerifyingKey.from_string(
-            bytes(self), curve=ecdsa_SECP256k1
-        ).pubkey.point
-        x_str = ecdsa_util.number_to_string(point.x(), order)
-        return hexlify(bytes(chr(2 + (point.y() & 1)), "ascii") + x_str).decode("ascii")
+        # Use secp256k1 to serialize as compressed key
+        return self._secp256k1_pubkey.serialize(compressed=True).hex()
 
     def un_compressed(self):
         """Generate uncompressed public key"""
-        public_key = repr(self._pk)
-        prefix = public_key[0:2]
-        if prefix == "04":
-            return public_key
-        if prefix not in ["02", "03"]:
-            raise ValueError("Invalid public key prefix")
-
-        xxx = int(public_key[2:], 16)
-        yyy = self.derive_y_from_x(xxx, prefix == "02")
-        return f"04{xxx:064x}{yyy:064x}"
+        # Use secp256k1 to serialize as uncompressed key
+        return self._secp256k1_pubkey.serialize(compressed=False).hex()
 
     def point(self):
         """Get ECDSA point representation"""
-        string = unhexlify(self.un_compressed())
-        return ecdsa_VerifyingKey.from_string(
-            string[1:], curve=ecdsa_SECP256k1
-        ).pubkey.point
+        # Get the uncompressed serialization to extract x and y coordinates
+        uncompressed = self._secp256k1_pubkey.serialize(compressed=False)
+        # The first byte is 0x04 (uncompressed prefix), then 32 bytes x, then 32 bytes y
+        x = int.from_bytes(uncompressed[1:33], 'big')
+        y = int.from_bytes(uncompressed[33:65], 'big')
+        # Return a tuple representing the point (x, y)
+        return (x, y)
 
     def __repr__(self):
         """Return hex representation"""
@@ -214,7 +193,7 @@ class PublicKey:
         return format(self._pk, _format)
 
     def __bytes__(self):
-        """Return raw bytes (33 bytes)"""
+        """Return raw bytes (33 bytes for compressed)"""
         return bytes(self._pk)
 
 
@@ -223,7 +202,21 @@ class PrivateKey:
 
     def __init__(self, wif=None, prefix=PREFIX):
         self._wif = wif if isinstance(wif, Base58) else Base58(wif)
-        self._pubkeyhex, self._pubkeyuncompressedhex = self.compressed_pubkey()
+        
+        # Decode the WIF to get raw private key bytes
+        wif_bytes = unhexlify(base58_check_decode(wif))
+        # Skip the prefix (0x80) and get just the private key (32 bytes)
+        privkey_bytes = wif_bytes[1:33]
+        
+        # Create secp256k1 PrivateKey object
+        self._secp256k1_privkey = secp256k1.PrivateKey(privkey_bytes, raw=True)
+        # Get the corresponding public key
+        self._secp256k1_pubkey = self._secp256k1_privkey.pubkey
+        
+        # Store compressed and uncompressed public keys
+        self._pubkeyhex = self._secp256k1_pubkey.serialize(compressed=True).hex()
+        self._pubkeyuncompressedhex = self._secp256k1_pubkey.serialize(compressed=False).hex()
+        
         self.pubkey = PublicKey(self._pubkeyhex, prefix=prefix)
         self.uncompressed = PublicKey(self._pubkeyuncompressedhex, prefix=prefix)
         self.uncompressed.address = Address(
@@ -233,21 +226,8 @@ class PrivateKey:
 
     def compressed_pubkey(self):
         """Derive compressed and uncompressed public keys"""
-        secret = unhexlify(repr(self._wif))
-        order = ecdsa_SigningKey.from_string(
-            secret, curve=ecdsa_SECP256k1
-        ).curve.generator.order()
-        point = ecdsa_SigningKey.from_string(
-            secret, curve=ecdsa_SECP256k1
-        ).verifying_key.pubkey.point
-        x_str = ecdsa_util.number_to_string(point.x(), order)
-        y_str = ecdsa_util.number_to_string(point.y(), order)
-
-        compressed = hexlify(chr(2 + (point.y() & 1)).encode("ascii") + x_str).decode(
-            "ascii"
-        )
-        uncompressed = hexlify(chr(4).encode("ascii") + x_str + y_str).decode("ascii")
-        return [compressed, uncompressed]
+        # Just return the precomputed values
+        return [self._pubkeyhex, self._pubkeyuncompressedhex]
 
     def __bytes__(self):
         """Return raw private key bytes"""
