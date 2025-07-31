@@ -45,7 +45,7 @@ from .operations import (Asset_claim_pool, Asset_create, Asset_issue,
                          GrapheneObject, Limit_order_cancel,
                          Limit_order_create, Liquidity_pool_create,
                          Liquidity_pool_deposit, Liquidity_pool_exchange,
-                         Transfer, Liquidity_pool_update, Liquidity_pool_delete)
+                         Transfer, Liquidity_pool_update)
 from .rpc import rpc_get_transaction_hex
 from .types import Array, Id, PointInTime, Signature, Uint16, Uint32, varint
 from .utilities import from_iso_date, it
@@ -85,7 +85,6 @@ class Operation:  # refactored  litepresence2019
             19: Asset_publish_feed,
             47: Asset_claim_pool,
             59: Liquidity_pool_create,
-            60: Liquidity_pool_delete,
             61: Liquidity_pool_deposit,
             63: Liquidity_pool_exchange,
             75: Liquidity_pool_update,
@@ -282,8 +281,6 @@ def serialize_transaction(rpc, trx):
             buf += bytes(Asset_claim_pool(op[1]))
         elif op[0] == 59:
             buf += bytes(Liquidity_pool_create(op[1]))
-        elif op[0] == 60:
-            buf += bytes(Liquidity_pool_delete(op[1]))
         elif op[0] == 61:
             buf += bytes(Liquidity_pool_deposit(op[1]))
         elif op[0] == 63:
@@ -297,10 +294,7 @@ def serialize_transaction(rpc, trx):
     # prepend the chain ID to the buffer to create final serialized msg
     message = unhexlify(ID) + buf
     # if serialization is correct: rpc_tx_hex = manual_tx_hex plus an empty signature
-    if rpc_tx_hex != manual_tx_hex + b"00":
-        print("RPC:    ", rpc_tx_hex)
-        print("Manual: ", manual_tx_hex + b"00")
-        raise RuntimeError("Serialization Failed")
+    assert rpc_tx_hex == manual_tx_hex + b"00", "Serialization Failed"
     return trx, message
 
 

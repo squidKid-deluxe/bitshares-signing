@@ -147,7 +147,6 @@ def rpc_tx_fees(rpc, account_id):
                     19,  # publish a price feed
                     47,
                     59,  # create liquidity pool
-                    60,  # delete liquidity pool
                     61,  # deposit to liquidity pool
                     63,  # exchange via liquidity pool
                     75,  # update liquidity pool
@@ -169,7 +168,6 @@ def rpc_tx_fees(rpc, account_id):
         "publish",
         "fee_pool",
         "pool_create",
-        "pool_delete",
         "pool_deposit",
         "swap",
         "pool_update",

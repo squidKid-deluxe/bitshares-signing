@@ -67,7 +67,7 @@ class Array:
     """
 
     def __init__(self, data):
-        self.data = data or []
+        self.data = data
         self.length = int(len(self.data))
 
     def __bytes__(self):

@@ -38,7 +38,7 @@ from .graphenize.limit_orders import (graphenize_cancel,
 from .graphenize.liquidity_pools import (graphenize_pool_creation,
                                          graphenize_pool_deposit,
                                          graphenize_swaps,
-                                         graphenize_pool_update, graphenize_pool_delete)
+                                         graphenize_pool_update)
 from .graphenize.price_feeds import graphenize_add_producer, graphenize_publish
 from .graphenize.transfer import graphenize_transfer
 from .rpc import (rpc_account_id, rpc_balances, rpc_block_number,
@@ -53,7 +53,6 @@ SATOSHI = 0.00000001
 # almost 1
 SIXSIG = 0.999999
 
-DEV = True
 
 
 def graphenize_login(login_edicts, fees, account_id, tx_operations):
@@ -142,8 +141,6 @@ def build_transaction(rpc, order):
     fees = rpc_tx_fees(rpc, account_id)
     # establish transaction expiration
     tx_expiration = to_iso_date(int(time.time() + 120))
-    if DEV:
-        print(ref_block_num, ref_block_prefix, tx_expiration)
     # initialize tx_operations list
     tx_operations = []
 
@@ -154,7 +151,6 @@ def build_transaction(rpc, order):
         "cancel": [],
         "swap": [],
         "create_pool": [],
-        "delete_pool": [],
         "create_asset": [],
         "transfer": [],
         "reserve": [],
@@ -213,7 +209,6 @@ def build_transaction(rpc, order):
         ("call", graphenize_call, [[asset_id, asset_precision], [currency_id, currency_precision]]),
         ("pool_update", graphenize_pool_update, [[asset_id, asset_precision], [currency_id, currency_precision]]),
         ("pool_deposit", graphenize_pool_deposit, [[asset_id, asset_precision], [currency_id, currency_precision]]),
-        ("delete_pool", graphenize_pool_delete, [[asset_id, asset_precision], [currency_id, currency_precision]]),
         ("fee_pool", graphenize_fee_pool, [[asset_id, asset_precision], [currency_id, currency_precision]]),
         ("transfer", graphenize_transfer, [asset_id, asset_precision]),
         ("issue", graphenize_issue, [asset_id, asset_precision]),

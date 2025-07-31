@@ -112,3 +112,59 @@ def graphenize_pool_deposit(
         # add this op to our list of ops
         tx_operations.append(operation)
     return tx_operations
+
+
+def graphenize_pool_update(
+    pool_update_edicts,
+    fees,
+    asset,
+    currency,
+    account_id,
+    tx_operations,
+):
+    asset_id, asset_precision = asset
+    currency_id, currency_precision = currency
+    for pool_update in pool_update_edicts:
+        # call fee ordered dictionary of graphene amount, asset_id
+        fee = {"amount": fees["pool_update"], "asset_id": "1.3.0"}
+        operation = [
+            75,
+            {
+                "fee": fee,
+                "account": account_id,
+                "pool": pool_update["pool"],
+                "taker_fee_percent": int(pool_update["taker_fee"] * 100),
+                "withdrawal_fee_percent": int(pool_update["withdrawal_fee"] * 100),
+                "extensions": [],
+            },
+        ]
+        # add this op to our list of ops
+        tx_operations.append(operation)
+    return tx_operations
+
+
+def graphenize_pool_delete(
+    pool_delete_edicts,
+    fees,
+    asset,
+    currency,
+    account_id,
+    tx_operations,
+):
+    asset_id, asset_precision = asset
+    currency_id, currency_precision = currency
+    for pool_delete in pool_delete_edicts:
+        # call fee ordered dictionary of graphene amount, asset_id
+        fee = {"amount": fees["pool_delete"], "asset_id": "1.3.0"}
+        operation = [
+            60,
+            {
+                "fee": fee,
+                "account": account_id,
+                "pool": pool_delete["pool"],
+                "extensions": [],
+            },
+        ]
+        # add this op to our list of ops
+        tx_operations.append(operation)
+    return tx_operations

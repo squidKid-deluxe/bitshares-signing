@@ -342,12 +342,12 @@ class Liquidity_pool_update(GrapheneObject):
     """
 
     def _prepare_data(self, kwargs):
-        if "taker_fee_percent" in kwargs:
+        if kwargs.get("taker_fee_percent"):
             taker_fee_percent = Optional(Uint16(kwargs["taker_fee_percent"]))
         else:
             taker_fee_percent = Optional(None)
 
-        if "withdrawal_fee_percent" in kwargs:
+        if kwargs.get("withdrawal_fee_percent"):
             withdrawal_fee_percent = Optional(
                 Uint16(kwargs["withdrawal_fee_percent"])
             )
@@ -360,15 +360,5 @@ class Liquidity_pool_update(GrapheneObject):
             "pool": ObjectId(kwargs["pool"], "liquidity_pool"),
             "taker_fee_percent": taker_fee_percent,
             "withdrawal_fee_percent": withdrawal_fee_percent,
-            "extensions": Array([]),
-        }
-        
-
-class Liquidity_pool_delete(GrapheneObject):
-    def _prepare_data(self, kwargs):
-        return {
-            "fee": Asset(kwargs["fee"]),
-            "account": ObjectId(kwargs["account"], "account"),
-            "pool": ObjectId(kwargs["pool"], "liquidity_pool"),
-            "extensions": Array([]),
+            "extensions": Set([]),
         }
