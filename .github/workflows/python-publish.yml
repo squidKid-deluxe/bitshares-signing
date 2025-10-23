@@ -26,6 +26,34 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Set project version from release title
+        # Use the release title as the version string
+        env:
+          VERSION: ${{ github.event.release.name }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          v = os.environ.get("VERSION","").strip()
+          if not v:
+              print("ERROR: release name is empty; cannot set version.")
+              sys.exit(1)
+          # Basic escaping for double quotes to avoid breaking TOML string literal
+          v_escaped = v.replace('"', '\\"')
+          path = "pyproject.toml"
+          s = open(path, "r", encoding="utf-8").read()
+          # If version already exists, replace the whole line
+          if re.search(r'^\s*version\s*=', s, flags=re.M):
+              s = re.sub(r'^\s*version\s*=.*$', f'version = "{v_escaped}"', s, flags=re.M)
+          else:
+              # Insert version directly after the [project] header
+              s, n = re.subn(r'(^\s*\[project\]\s*)', r'\1\nversion = "'+v_escaped+'"\n', s, flags=re.M)
+              if n == 0:
+                  print("WARNING: [project] table not found; appending version at top of file")
+                  s = f'version = "{v_escaped}"\n' + s
+          open(path, "w", encoding="utf-8").write(s)
+          print("Set pyproject.toml version to:", v)
+          PY
+
       - name: Build release distributions
         run: |
           # NOTE: put your own distribution build steps here.
