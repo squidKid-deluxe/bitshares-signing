@@ -24,4 +24,9 @@ dependencies = [
 requires-python = ">= 3.9"
 
 [tool.setuptools]
-packages = ["bitshares_signing"]
+
+# Use setuptools package discovery to include the package and all subpackages
+[tool.setuptools.packages.find]
+include = ["bitshares_signing*"]
+# If you use a src/ layout, uncomment and adjust the line below:
+# where = ["src"]
