@@ -151,8 +151,14 @@ def unicodify(data):
             r.append("f")
         elif o == 13:
             r.append("\r")
-        else:
+        elif o < 0x80:
             r.append(s)
+        elif o < 0x10000:
+            r.append("u%04x" % o)
+        else:
+            o -= 0x10000
+            r.append("u%04x" % (0xD800 + (o >> 10)))
+            r.append("u%04x" % (0xDC00 + (o & 0x3FF)))
     return bytes("".join(r), "utf-8")
 
 
