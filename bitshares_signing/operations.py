@@ -148,6 +148,11 @@ class Asset_create(GrapheneObject):
 
 class AssetOptions(GrapheneObject):
     def _prepare_data(self, kwargs):
+        ext = kwargs.get("extensions")
+        if ext and isinstance(ext, dict):
+            extensions = AssetOptionsExtension(ext)
+        else:
+            extensions = Array([])
         return {
             "max_supply": Int64(kwargs["max_supply"]),
             "market_fee_percent": Uint16(kwargs["market_fee_percent"]),
@@ -168,7 +173,7 @@ class AssetOptions(GrapheneObject):
                 [ObjectId(x, "asset") for x in kwargs["blacklist_markets"]]
             ),
             "description": String(kwargs["description"]),
-            "extensions": Array([]),
+            "extensions": extensions,
         }
 
 
@@ -182,8 +187,83 @@ class Asset_reserve(GrapheneObject):
         }
 
 
+class BitAssetOptionsExtension(Extension):
+    def icr(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def mcr(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def mssr(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def mcfr(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def fsfp(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def bsrm(value):
+        if value is not None:
+            return Uint8(value)
+        return Optional(None)
+
+    def cbf(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    sorted_options = [
+        ("initial_collateral_ratio", icr),
+        ("maintenance_collateral_ratio", mcr),
+        ("maximum_short_squeeze_ratio", mssr),
+        ("margin_call_fee_ratio", mcfr),
+        ("force_settle_fee_percent", fsfp),
+        ("black_swan_response_method", bsrm),
+        ("collateral_bitshares_fee", cbf),
+    ]
+
+
+class AssetOptionsExtension(Extension):
+    def reward_percent(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    def whitelist_market_fee_sharing(value):
+        if value is not None:
+            return Array([ObjectId(x, "account") for x in value])
+        return Optional(None)
+
+    def tfp(value):
+        if value is not None:
+            return Uint16(value)
+        return Optional(None)
+
+    sorted_options = [
+        ("reward_percent", reward_percent),
+        ("whitelist_market_fee_sharing", whitelist_market_fee_sharing),
+        ("taker_fee_percent", tfp),
+    ]
+
+
 class BitAssetOptions(GrapheneObject):
     def _prepare_data(self, kwargs):
+        ext = kwargs.get("extensions")
+        if ext and isinstance(ext, dict):
+            extensions = BitAssetOptionsExtension(ext)
+        else:
+            extensions = Array([])
         return {
             "feed_lifetime_sec": Uint32(kwargs["feed_lifetime_sec"]),
             "minimum_feeds": Uint8(kwargs["minimum_feeds"]),
@@ -195,7 +275,7 @@ class BitAssetOptions(GrapheneObject):
                 kwargs["maximum_force_settlement_volume"]
             ),
             "short_backing_asset": ObjectId(kwargs["short_backing_asset"], "asset"),
-            "extensions": Array([]),
+            "extensions": extensions,
         }
 
 
@@ -370,5 +450,28 @@ class Liquidity_pool_delete(GrapheneObject):
             "fee": Asset(kwargs["fee"]),
             "account": ObjectId(kwargs["account"], "account"),
             "pool": ObjectId(kwargs["pool"], "liquidity_pool"),
+            "extensions": Array([]),
+        }
+
+
+class Asset_update(GrapheneObject):
+    def _prepare_data(self, kwargs):
+        return {
+            "fee": Asset(kwargs["fee"]),
+            "issuer": ObjectId(kwargs["issuer"], "account"),
+            "asset_to_update": ObjectId(kwargs["asset_to_update"], "asset"),
+            "new_issuer": Optional(None),
+            "new_options": AssetOptions(kwargs["new_options"]),
+            "extensions": Array([]),
+        }
+
+
+class Asset_update_bitasset(GrapheneObject):
+    def _prepare_data(self, kwargs):
+        return {
+            "fee": Asset(kwargs["fee"]),
+            "issuer": ObjectId(kwargs["issuer"], "account"),
+            "asset_to_update": ObjectId(kwargs["asset_to_update"], "asset"),
+            "new_options": BitAssetOptions(kwargs["new_options"]),
             "extensions": Array([]),
         }

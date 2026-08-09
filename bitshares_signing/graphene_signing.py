@@ -40,7 +40,8 @@ from .base58 import PrivateKey, PublicKey
 from .config import ID, PREFIX
 # if there was ever a use for "import *"...
 from .operations import (Asset_claim_pool, Asset_create, Asset_issue,
-                         Asset_publish_feed, Asset_reserve,
+                         Asset_publish_feed, Asset_reserve, Asset_update,
+                         Asset_update_bitasset,
                          Asset_update_feed_producers, Call_order_update,
                          GrapheneObject, Limit_order_cancel,
                          Limit_order_create, Liquidity_pool_create,
@@ -79,6 +80,8 @@ class Operation:  # refactored  litepresence2019
             2: Limit_order_cancel,
             3: Call_order_update,
             10: Asset_create,
+            11: Asset_update,
+            12: Asset_update_bitasset,
             13: Asset_update_feed_producers,
             14: Asset_issue,
             15: Asset_reserve,
@@ -270,6 +273,10 @@ def serialize_transaction(rpc, trx):
             buf += bytes(varint(0))
         elif op[0] == 10:
             buf += bytes(Asset_create(op[1]))
+        elif op[0] == 11:
+            buf += bytes(Asset_update(op[1]))
+        elif op[0] == 12:
+            buf += bytes(Asset_update_bitasset(op[1]))
         elif op[0] == 13:
             buf += bytes(Asset_update_feed_producers(op[1]))
         elif op[0] == 14:

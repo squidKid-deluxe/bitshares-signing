@@ -2,4 +2,5 @@ bitshares_signing.egg-info/
 bitshares_signing/__pycache__/
 bitshares_signing/pipe/
 bitshares_signing/graphenize/__pycache__/
+build/
 dist/

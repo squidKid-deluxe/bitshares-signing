@@ -39,6 +39,8 @@ from .graphenize.liquidity_pools import (graphenize_pool_creation,
                                          graphenize_pool_deposit,
                                          graphenize_swaps,
                                          graphenize_pool_update, graphenize_pool_delete)
+from .graphenize.asset_update import (graphenize_asset_update,
+                                      graphenize_asset_update_bitasset)
 from .graphenize.price_feeds import graphenize_add_producer, graphenize_publish
 from .graphenize.transfer import graphenize_transfer
 from .rpc import (rpc_account_id, rpc_balances, rpc_block_number,
@@ -166,8 +168,8 @@ def build_transaction(rpc, order):
         "fee_pool": [],
         "publish": [],
         "add_producer": [],
-        # TODO
-        # add those from `shorting attack avenger`
+        "asset_update": [],
+        "asset_update_bitasset": [],
     }
 
     for edict in order["edicts"]:
@@ -218,6 +220,8 @@ def build_transaction(rpc, order):
         ("transfer", graphenize_transfer, [asset_id, asset_precision]),
         ("issue", graphenize_issue, [asset_id, asset_precision]),
         ("reserve", graphenize_reserve, [asset_id, asset_precision]),
+        ("asset_update", graphenize_asset_update, [rpc]),
+        ("asset_update_bitasset", graphenize_asset_update_bitasset, [rpc]),
         ("publish", graphenize_publish, [rpc]),
         ("add_producer", graphenize_add_producer, []),
         ("login", graphenize_login, []),

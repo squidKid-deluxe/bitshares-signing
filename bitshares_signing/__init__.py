@@ -143,6 +143,8 @@ SUPPORTED_OPS = [
     "create_pool",
     "create_asset",
     "update_pool",
+    "asset_update",
+    "asset_update_bitasset",
 ]
 
 

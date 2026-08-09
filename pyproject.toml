@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bitshares-signing"
+version = "0.0.0"
 description = "Lightweight Python library for BitShares"
 authors = [
     { name = "squidKid-deluxe" },
@@ -22,10 +23,5 @@ dependencies = [
 ]
 requires-python = ">= 3.9"
 
-[tool.setuptools]
-
-# Use setuptools package discovery to include the package and all subpackages
 [tool.setuptools.packages.find]
 include = ["bitshares_signing*"]
-# If you use a src/ layout, uncomment and adjust the line below:
-# where = ["src"]

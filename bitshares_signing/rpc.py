@@ -141,6 +141,8 @@ def rpc_tx_fees(rpc, account_id):
                     2,  # cancel a limit order
                     3,  # update a call order
                     10,  # create an asset
+                    11,  # update an asset
+                    12,  # update a bitasset
                     13,  # add a feed producer
                     14,  # issue a UIA
                     15,  # reserve a UIA
@@ -163,6 +165,8 @@ def rpc_tx_fees(rpc, account_id):
         "cancel",
         "call",
         "asset_create",
+        "asset_update",
+        "asset_update_bitasset",
         "add_producer",
         "issue",
         "reserve",
@@ -177,6 +181,11 @@ def rpc_tx_fees(rpc, account_id):
 
     final_ret = {key: ret[i]["amount"] for i, key in enumerate(keys)}
     return final_ret
+
+
+def rpc_get_required_fees(rpc, operations, fee_asset="1.3.0"):
+    result = wss_query(rpc, ["database", "get_required_fees", [operations, fee_asset]])
+    return [r["amount"] for r in result]
 
 
 def rpc_ticker(rpc, asset, currency):
